@@ -1,0 +1,12 @@
+name: shiki-backend
+
+services:
+  backend:
+    build: .
+    container_name: shiki-backend
+    working_dir: /app
+    volumes:
+      - ./:/app
+    ports:
+      - "8082:8082"
+    command: php artisan serve --host=0.0.0.0 --port=8082
