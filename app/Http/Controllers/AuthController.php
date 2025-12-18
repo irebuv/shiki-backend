@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 
@@ -38,7 +39,8 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        if (! $token = auth('api')->attempt($credentials)) {
+        $guard = Auth::guard('api');
+        if (! $token = $guard->attempt($credentials)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
@@ -55,15 +57,24 @@ class AuthController extends Controller
 
     public function logout()
     {
-        auth('api')->logout();
+        $guard = Auth::guard('api');
+
+        $guard->logout();
 
         return response()->json(['message' => 'Logged out']);
     }
 
     public function refresh()
-    {
-        return response()->json([
-            'token' => auth('api')->refresh(),
-        ]);
-    }
+{
+    /** @var JWTGuard $guard */
+    $guard = Auth::guard('api');
+
+    return response()->json([
+        'message' => 'Token refreshed',
+        'data'    => [
+            'token' => $guard->refresh(),
+        ],
+        'errors'  => null,
+    ]);
+}
 }

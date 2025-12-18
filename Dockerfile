@@ -1,6 +1,12 @@
 FROM php:8.3-cli
 
-# ставим драйвер для MySQL
-RUN docker-php-ext-install pdo_mysql
+RUN apt-get update && apt-get install -y unzip git curl \
+    && docker-php-ext-install pdo pdo_mysql opcache
+
+# ✅ install composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# ✅ opcache cli ini
+COPY php-conf/99-opcache-cli.ini /usr/local/etc/php/conf.d/99-opcache-cli.ini
 
 WORKDIR /app

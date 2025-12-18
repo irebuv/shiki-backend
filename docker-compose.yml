@@ -9,4 +9,5 @@ services:
       - ./:/app
     ports:
       - "8082:8082"
-    command: php artisan serve --host=0.0.0.0 --port=8082
+    command: sh -c "php artisan storage:link || true && php artisan serve --host=0.0.0.0 --port=8082"
+

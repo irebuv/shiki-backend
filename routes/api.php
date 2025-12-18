@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AnimeController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,6 +11,7 @@ Route::get('/ping', function () {
 });
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login']);
+Route::get('/anime', [AnimeController::class, 'index']);
 
 Route::middleware('auth:api')->group(function () {
     Route::get('/me',      [AuthController::class, 'me']);
