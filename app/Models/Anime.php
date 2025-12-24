@@ -5,7 +5,8 @@ namespace App\Models;
 use Cviebrock\EloquentSluggable\Sluggable;
 use Illuminate\Database\Eloquent\Model;
 
-class Anime extends Model {
+class Anime extends Model
+{
     use Sluggable;
     protected $table = 'anime';
     protected $fillable = [
@@ -15,7 +16,10 @@ class Anime extends Model {
         'featured_image',
         'files',
     ];
-
+    public function filters()
+    {
+        return $this->belongsToMany(Filter::class, 'filter_anime', 'product_id', 'filter_id');
+    }
     public function sluggable(): array
     {
         return [
