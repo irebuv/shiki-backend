@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AnimeAdminController;
 use App\Http\Controllers\AnimeController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
@@ -10,7 +11,7 @@ Route::get('/ping', function () {
     ], 201);
 });
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login',    [AuthController::class, 'login']);
+Route::post('/login',    [AuthController::class, 'login'])->name('login');
 Route::get('/anime', [AnimeController::class, 'index']);
 
 Route::middleware('auth:api')->group(function () {
@@ -18,3 +19,10 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
 });
+
+
+Route::prefix('admin')
+    ->middleware(['auth:api', 'admin'])
+    ->group(function () {
+        Route::get('/anime', [AnimeAdminController::class, 'index']);
+    });

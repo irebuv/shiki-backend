@@ -14,7 +14,6 @@ class AnimeController extends Controller
         $sort       = trim((string) $request->input('sort', 'id'));
         $split = explode(':', $sort);
         $query = Anime::query();
-        logger($filters);
 
         if ($split[0] === 'random') {
             $daySeed = now()->timezone('Europe/Kyiv')->format('Y-m-d');

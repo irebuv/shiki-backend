@@ -34,19 +34,24 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $credentials = $request->validate([
+        $request->validate([
             'email'    => ['required', 'email'],
             'password' => ['required', 'string'],
+            'rememberMe' => ['sometimes', 'boolean'],
         ]);
 
+        $credentials = $request->only(['email', 'password']);
         $guard = Auth::guard('api');
-        if (! $token = $guard->attempt($credentials)) {
+        $ttlMinutes = $request->boolean('rememberMe') ? 60 * 24 * 14 : config('jwt.ttl');
+
+        if (! $token = $guard->setTTL($ttlMinutes)->attempt($credentials)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
         return response()->json([
             'user'  => auth('api')->user(),
             'token' => $token,
+            'expires_in' => $ttlMinutes * 60, // seconds
         ]);
     }
 
