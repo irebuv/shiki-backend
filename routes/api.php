@@ -25,4 +25,5 @@ Route::prefix('admin')
     ->middleware(['auth:api', 'admin'])
     ->group(function () {
         Route::get('/anime', [AnimeAdminController::class, 'index']);
+        Route::post('/anime', [AnimeAdminController::class, 'store']);
     });
