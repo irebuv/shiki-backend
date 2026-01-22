@@ -15,6 +15,7 @@ class Anime extends Model
         'rating',
         'featured_image',
         'files',
+        'rate',
     ];
     public function filters()
     {

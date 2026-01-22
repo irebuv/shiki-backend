@@ -11,7 +11,7 @@ class AnimeAdminController extends Controller
     public function index(Request $request)
     {
         $query = Anime::query();
-
+ 
         $query->orderBy('id', 'desc');
 
         $paginator = $query->paginate(24)->appends($request->query());
@@ -37,7 +37,7 @@ class AnimeAdminController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|min:3|max:120',
             'description' => 'nullable|string|max:500',
-            'type' => 'required|string',
+            'rating' => 'required',
         ]);
 
         $anime = Anime::create($validated);
