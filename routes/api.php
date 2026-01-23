@@ -26,4 +26,8 @@ Route::prefix('admin')
     ->group(function () {
         Route::get('/anime', [AnimeAdminController::class, 'index']);
         Route::post('/anime', [AnimeAdminController::class, 'store']);
+        Route::put('/anime/{anime}', [AnimeAdminController::class, 'update']);
+        Route::patch('/anime/{anime}', [AnimeAdminController::class, 'update']);
+        Route::delete('/anime/{anime}', [AnimeAdminController::class, 'destroy']);
+        Route::post('/anime/{anime}/image', [AnimeAdminController::class, 'uploadImage']);
     });
