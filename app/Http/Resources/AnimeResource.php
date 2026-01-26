@@ -11,7 +11,7 @@ class AnimeResource extends JsonResource
     {
         return [
             'name' => 'required|string|min:3|max:120',
-            'description' => 'nullable|string|max:500',
+            'description' => 'nullable|string|max:5000',
             'rating' => 'required',
             'type' => 'nullable|string|max:50',
             'episodes' => 'nullable|integer|min:1',
@@ -25,6 +25,8 @@ class AnimeResource extends JsonResource
             'main_characters' => 'nullable|string',
             'similar' => 'nullable|string',
             'reviews' => 'nullable|string',
+            'filter_ids' => 'nullable|array',
+            'filter_ids.*' => 'integer|exists:filters,id',
         ];
     }
 
@@ -37,6 +39,9 @@ class AnimeResource extends JsonResource
             'images' => [
                 'original' => $featuredUrl,
             ],
+            'filter_ids' => $this->whenLoaded('filters', function () {
+                return $this->filters->pluck('id')->values();
+            }),
             'created_at' => $this->created_at
                 ? $this->created_at->format('d.m.Y H:i')
                 : null,

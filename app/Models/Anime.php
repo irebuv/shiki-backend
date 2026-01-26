@@ -33,7 +33,8 @@ class Anime extends Model
     ];
     public function filters()
     {
-        return $this->belongsToMany(Filter::class, 'filter_anime', 'anime_id', 'filter_id');
+        return $this->belongsToMany(Filter::class, 'filter_anime', 'anime_id', 'filter_id')
+            ->withPivot('filter_group_id');
     }
 
     public function media(): HasMany

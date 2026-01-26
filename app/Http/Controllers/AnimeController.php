@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Anime;
+use App\Models\Filter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -29,7 +30,7 @@ class AnimeController extends Controller
                 $query->whereHas('filters', fn($q) => $q->where('filters.id', $filterId));
             }
         }
-        $rows = DB::table('filters')
+        $rows = Filter::query()
             ->join('filter_groups', 'filters.filter_group_id', '=', 'filter_groups.id')
             ->select(
                 'filters.id as filter_id',
