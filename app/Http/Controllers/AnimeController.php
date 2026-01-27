@@ -30,24 +30,10 @@ class AnimeController extends Controller
                 $query->whereHas('filters', fn($q) => $q->where('filters.id', $filterId));
             }
         }
-        $rows = Filter::query()
-            ->join('filter_groups', 'filters.filter_group_id', '=', 'filter_groups.id')
-            ->select(
-                'filters.id as filter_id',
-                'filters.title as filter_title',
-                'filter_groups.title as group_title'
-            )
-            ->orderBy('filter_groups.title')
-            ->orderBy('filters.title')
-            ->get();
+        
+        // filters list
+        $filtersList = Filter::groupedList();
 
-
-        $filtersList = $rows->groupBy('group_title')->map(function ($items) {
-            return $items->map(fn($row) => [
-                'id' => $row->filter_id,
-                'title' => $row->filter_title,
-            ])->values();
-        });
         $perPage = 24;
         $paginator = $query->paginate($perPage)->appends($request->query());
         $items = $paginator->items();

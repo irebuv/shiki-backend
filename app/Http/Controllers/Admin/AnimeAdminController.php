@@ -21,22 +21,7 @@ class AnimeAdminController extends Controller
 
 
         // filters list
-        $rows = Filter::query()
-            ->join('filter_groups', 'filters.filter_group_id', '=', 'filter_groups.id')
-            ->select(
-                'filters.id as filter_id',
-                'filters.title as filter_title',
-                'filter_groups.title as group_title'
-            )
-            ->orderBy('filter_groups.title')
-            ->orderBy('filters.title')
-            ->get();
-        $filtersList = $rows->groupBy('group_title')->map(function ($items) {
-            return $items->map(fn($row) => [
-                'id' => $row->filter_id,
-                'title' => $row->filter_title,
-            ])->values();
-        });
+        $filtersList = Filter::groupedList();
 
         $paginator = $query->paginate(24)->appends($request->query());
         $items = $paginator->items();
