@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Cviebrock\EloquentSluggable\Sluggable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Anime extends Model
@@ -23,7 +24,7 @@ class Anime extends Model
         'release_date',
         'status',
         'age_rating',
-        'studio',
+        'studio_id',
         'related',
         'authors',
         'main_characters',
@@ -45,6 +46,11 @@ class Anime extends Model
     public function episodes(): HasMany
     {
         return $this->hasMany(Episode::class);
+    }
+
+    public function studio(): BelongsTo
+    {
+        return $this->belongsTo(Studio::class);
     }
     public function sluggable(): array
     {

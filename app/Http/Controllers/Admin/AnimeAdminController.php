@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AnimeResource;
 use App\Models\Anime;
 use App\Models\Filter;
+use App\Models\Studio;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -23,12 +24,18 @@ class AnimeAdminController extends Controller
         // filters list
         $filtersList = Filter::groupedList();
 
+        $studios = Studio::query()
+            ->select(['id', 'name'])
+            ->orderBy('name')
+            ->get();
+
         $paginator = $query->paginate(24)->appends($request->query());
         $items = $paginator->items();
         $anime = AnimeResource::collection($items)->resolve();
 
         return response()->json([
             'anime' => $anime,
+            'studios' => $studios,
 
             'pagination' => [
                 'current_page'  => $paginator->currentPage(),

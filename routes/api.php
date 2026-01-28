@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AnimeAdminController;
 use App\Http\Controllers\Admin\FilterAdminController;
 use App\Http\Controllers\Admin\FilterGroupAdminController;
+use App\Http\Controllers\Admin\StudioAdminController;
 use App\Http\Controllers\AnimeController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
@@ -27,24 +28,16 @@ Route::prefix('admin')
     ->middleware(['auth:api', 'admin'])
     ->group(function () {
         //anime routes
-        Route::get('/anime', [AnimeAdminController::class, 'index']);
-        Route::post('/anime', [AnimeAdminController::class, 'store']);
-        Route::put('/anime/{anime}', [AnimeAdminController::class, 'update']);
-        Route::patch('/anime/{anime}', [AnimeAdminController::class, 'update']);
-        Route::delete('/anime/{anime}', [AnimeAdminController::class, 'destroy']);
+        Route::apiResource('/anime', AnimeAdminController::class)->except(['show']);
         Route::post('/anime/{anime}/image', [AnimeAdminController::class, 'uploadImage']);
 
         //filters routes
-        Route::get('/filters', [FilterAdminController::class, 'index']);
-        Route::post('/filters', [FilterAdminController::class, 'store']);
-        Route::put('/filters/{filter}', [FilterAdminController::class, 'update']);
-        Route::patch('/filters/{filter}', [FilterAdminController::class, 'update']);
-        Route::delete('/filters/{filter}', [FilterAdminController::class, 'destroy']);
+        Route::apiResource('/filters', FilterAdminController::class)->except(['show']);
 
         //filter groups routes
-        Route::get('/filter-groups', [FilterGroupAdminController::class, 'index']);
-        Route::post('/filter-groups', [FilterGroupAdminController::class, 'store']);
-        Route::put('/filter-groups/{filterGroup}', [FilterGroupAdminController::class, 'update']);
-        Route::patch('/filter-groups/{filterGroup}', [FilterGroupAdminController::class, 'update']);
-        Route::delete('/filter-groups/{filterGroup}', [FilterGroupAdminController::class, 'destroy']);
+        Route::apiResource('/filter-groups', FilterGroupAdminController::class)->except(['show']);
+
+        //studios routes
+        Route::apiResource('/studios', StudioAdminController::class)->except(['show']);
+        Route::post('/studios/{studio}/image', [StudioAdminController::class, 'uploadImage']);
     });

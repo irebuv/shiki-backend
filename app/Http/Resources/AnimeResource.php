@@ -32,7 +32,7 @@ class AnimeResource extends JsonResource
             'release_date' => 'nullable|date',
             'status' => 'nullable|string|max:50',
             'age_rating' => 'nullable|string|max:20',
-            'studio' => 'nullable|string|max:255',
+            'studio_id' => 'nullable|integer|exists:studios,id',
             'related' => 'nullable|string',
             'authors' => 'nullable|string',
             'main_characters' => 'nullable|string',
