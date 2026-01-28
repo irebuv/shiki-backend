@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class AnimeResource extends JsonResource
 {
@@ -13,7 +14,19 @@ class AnimeResource extends JsonResource
             'name' => 'required|string|min:3|max:120',
             'description' => 'nullable|string|max:5000',
             'rating' => 'required',
-            'type' => 'nullable|string|max:50',
+            'type' => [
+                'nullable',
+                'string',
+                'max:50',
+                Rule::in([
+                    'tv_short',
+                    'tv_medium',
+                    'tv_long',
+                    'movie',
+                    'ova',
+                    'ona',
+                ]),
+            ],
             'episodes' => 'nullable|integer|min:1',
             'episode_time' => 'nullable|integer|min:1',
             'release_date' => 'nullable|date',

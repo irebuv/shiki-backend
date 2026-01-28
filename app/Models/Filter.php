@@ -33,9 +33,9 @@ class Filter extends Model
     /**
      * Build filters grouped by filter group title for admin UI.
      */
-    public static function groupedList(): Collection
+    public static function groupedList(bool $onlyVisible = false): Collection
     {
-        $rows = self::query()
+        $rowsQuery = self::query()
             ->join('filter_groups', 'filters.filter_group_id', '=', 'filter_groups.id')
             ->select(
                 'filters.id as filter_id',
@@ -45,14 +45,21 @@ class Filter extends Model
                 'filter_groups.title as group_title'
             )
             ->orderBy('filter_groups.title')
-            ->orderBy('filters.title')
-            ->get();
+            ->orderBy('filters.title');
+
+        if ($onlyVisible) {
+            $rowsQuery->where(function ($q) {
+                $q->where('filters.visible', true)->orWhereNull('filters.visible');
+            });
+        }
+
+        $rows = $rowsQuery->get();
 
         return $rows->groupBy('group_title')->map(function ($items) {
             return $items->map(fn($row) => [
                 'id' => $row->filter_id,
                 'title' => $row->filter_title,
-                'visible' => (bool) $row->filter_visible,
+                'visible' => $row->filter_visible === null ? true : (bool) $row->filter_visible,
                 'filter_group_id' => $row->filter_group_id,
             ])->values();
         });

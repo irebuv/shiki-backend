@@ -12,6 +12,7 @@ class AnimeController extends Controller
     public function index(Request $request)
     {
         $filters = $request->input('filters', []);
+        $types = $request->input('type', []);
         $sort       = trim((string) $request->input('sort', 'id'));
         $split = explode(':', $sort);
         $query = Anime::query();
@@ -25,14 +26,57 @@ class AnimeController extends Controller
             $sortBy = $split[0];
             $query->orderBy($sortBy, $direction);
         }
-        if (!empty($filters)) {
-            foreach ($filters as $filterId) {
+        $requestedFilterIds = collect($filters)
+            ->map(fn($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($requestedFilterIds->isNotEmpty()) {
+            $visibleFilterIds = Filter::query()
+                ->whereIn('id', $requestedFilterIds)
+                ->where(function ($q) {
+                    $q->where('visible', true)->orWhereNull('visible');
+                })
+                ->pluck('id')
+                ->all();
+
+            foreach ($visibleFilterIds as $filterId) {
                 $query->whereHas('filters', fn($q) => $q->where('filters.id', $filterId));
             }
         }
+
+        $typeValues = collect(is_array($types) ? $types : [$types])
+            ->map(fn($value) => trim((string) $value))
+            ->filter()
+            ->values();
+
+        if ($typeValues->contains('tv')) {
+            $typeValues = $typeValues
+                ->reject(fn($value) => $value === 'tv')
+                ->merge(['tv_series', 'tv_short', 'tv_medium', 'tv_long'])
+                ->unique()
+                ->values();
+        }
+
+        $allowedTypes = [
+            'tv_series',
+            'tv_short',
+            'tv_medium',
+            'tv_long',
+            'movie',
+            'ova',
+            'ona',
+        ];
+
+        $typeValues = $typeValues->filter(fn($value) => in_array($value, $allowedTypes, true));
+
+        if ($typeValues->isNotEmpty()) {
+            $query->whereIn('type', $typeValues->all());
+        }
         
         // filters list
-        $filtersList = Filter::groupedList();
+        $filtersList = Filter::groupedList(true);
 
         $perPage = 24;
         $paginator = $query->paginate($perPage)->appends($request->query());
