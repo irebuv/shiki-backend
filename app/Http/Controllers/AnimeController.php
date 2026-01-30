@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Anime;
 use App\Models\Filter;
+use App\Models\Studio;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class AnimeController extends Controller
 {
@@ -13,6 +13,8 @@ class AnimeController extends Controller
     {
         $filters = $request->input('filters', []);
         $types = $request->input('type', []);
+        $studiosInput = $request->input('studios', []);
+        $age_rating = $request->input('age_rating', []);
         $sort       = trim((string) $request->input('sort', 'id'));
         $split = explode(':', $sort);
         $query = Anime::query();
@@ -74,9 +76,33 @@ class AnimeController extends Controller
         if ($typeValues->isNotEmpty()) {
             $query->whereIn('type', $typeValues->all());
         }
-        
+
+        $studioIds = collect(is_array($studiosInput) ? $studiosInput : [$studiosInput])
+            ->map(fn($value) => (int) $value)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($studioIds->isNotEmpty()) {
+            $query->whereIn('studio_id', $studioIds->all());
+        }
+
+        $age_normalize = collect(is_array($age_rating) ? $age_rating : [$age_rating])
+            ->map(fn($v) => trim((string) $v))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if (!empty($age_normalize->isNotEmpty())){
+           $query->whereIn('age_rating', $age_normalize->all());
+        }
+
         // filters list
         $filtersList = Filter::groupedList(true);
+
+        // getting studios
+        $studios = Studio::select(['id', 'name'])->orderBy('name')->get();
+        $query->with('studio');
 
         $perPage = 24;
         $paginator = $query->paginate($perPage)->appends($request->query());
@@ -84,6 +110,7 @@ class AnimeController extends Controller
 
         return response()->json([
             'anime' => $items,
+            'studios' => $studios,
 
             'pagination' => [
                 'current_page'  => $paginator->currentPage(),

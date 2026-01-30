@@ -93,6 +93,7 @@ class AnimeAdminController extends Controller
             Storage::disk($disk)->delete($anime->featured_image);
         }
 
+        $anime->filters()->detach();
         $anime->delete();
 
         return response()->json([
