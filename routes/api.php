@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\FilterAdminController;
 use App\Http\Controllers\Admin\FilterGroupAdminController;
 use App\Http\Controllers\Admin\StudioAdminController;
 use App\Http\Controllers\AnimeController;
+use App\Http\Controllers\AnimeFilterPresetController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -21,6 +22,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/me',      [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
+    Route::apiResource('/anime-filter-presets', AnimeFilterPresetController::class)
+        ->only(['index', 'store', 'update', 'destroy']);
 });
 
 
