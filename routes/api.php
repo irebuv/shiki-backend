@@ -17,6 +17,7 @@ Route::get('/ping', function () {
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login'])->name('login');
 Route::get('/anime', [AnimeController::class, 'index']);
+Route::get('/anime/{slug}', [AnimeController::class, 'show']);
 
 Route::middleware('auth:api')->group(function () {
     Route::get('/me',      [AuthController::class, 'me']);

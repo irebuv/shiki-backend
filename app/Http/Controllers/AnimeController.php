@@ -126,4 +126,13 @@ class AnimeController extends Controller
             'filtersList' => $filtersList,
         ]);
     }
+
+    // one anime page
+    public function show(string $slug){
+        $anime = Anime::query()->where('slug', $slug)->with(['studio'])->firstOrFail();
+
+        return response()->json([
+            'anime' => $anime,
+        ]);
+    }
 }
