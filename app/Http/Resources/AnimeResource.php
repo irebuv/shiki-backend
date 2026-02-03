@@ -15,7 +15,7 @@ class AnimeResource extends JsonResource
             'description' => 'nullable|string|max:5000',
             'rating' => 'required',
             'type' => [
-                'nullable',
+                'required',
                 'string',
                 'max:50',
                 Rule::in([
@@ -30,9 +30,21 @@ class AnimeResource extends JsonResource
             'episodes' => 'nullable|integer|min:1',
             'episode_time' => 'nullable|integer|min:1',
             'release_date' => 'nullable|date',
-            'status' => 'nullable|string|max:50',
+            'season_year' => 'nullable|integer|min:1900|max:2100',
+            'season' => [
+                'nullable',
+                'string',
+                'max:20',
+                Rule::in(['winter', 'spring', 'summer', 'fall']),
+            ],
+            'status' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::in(['airing', 'planned', 'released']),
+            ],
             'age_rating' => 'nullable|string|max:20',
-            'studio_id' => 'nullable|integer|exists:studios,id',
+            'studio_id' => 'required|integer|exists:studios,id',
             'related' => 'nullable|string',
             'authors' => 'nullable|string',
             'main_characters' => 'nullable|string',

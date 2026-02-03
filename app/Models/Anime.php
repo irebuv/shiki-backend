@@ -22,6 +22,8 @@ class Anime extends Model
         'episodes',
         'episode_time',
         'release_date',
+        'season_year',
+        'season',
         'status',
         'age_rating',
         'studio_id',
