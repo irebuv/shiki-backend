@@ -6,29 +6,50 @@ use App\Models\Anime;
 use App\Models\Filter;
 use App\Models\Studio;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 
 class AnimeController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->input('filters', []);
-        $types = $request->input('type', []);
-        $studiosInput = $request->input('studios', []);
-        $age_rating = $request->input('age_rating', []);
-        $sort       = trim((string) $request->input('sort', 'id'));
-        $split = explode(':', $sort);
+        // Normalize inputs so downstream logic can assume arrays.
+        $filtersInput = Arr::wrap($request->input('filters', []));
+        $typesInput = Arr::wrap($request->input('type', []));
+        $studiosInput = Arr::wrap($request->input('studios', []));
+        $seasonInput = Arr::wrap($request->input('season', []));
+        $yearInput = Arr::wrap($request->input('year', []));
+        $ageRatingInput = Arr::wrap($request->input('age_rating', []));
+        $sort = trim((string) $request->input('sort', 'id'));
+        [$sortKey, $sortDirection] = array_pad(explode(':', $sort, 2), 2, null);
+        $sortKey = $sortKey ?: 'id';
+        $sortDirection = $sortDirection ?: 'asc';
+
+        // Limit sorting to known columns and safe directions.
+        $allowedSorts = [
+            'id' => 'id',
+            'created_at' => 'created_at',
+            'updated_at' => 'updated_at',
+            'rating' => 'rating',
+            'season_year' => 'season_year',
+            'release_date' => 'release_date',
+        ];
+        $sortDirection = in_array($sortDirection, ['asc', 'desc'], true)
+            ? $sortDirection
+            : 'asc';
+
         $query = Anime::query();
 
-        if ($split[0] === 'random') {
+        if ($sortKey === 'random') {
+            // Stable random order per day.
             $daySeed = now()->timezone('Europe/Kyiv')->format('Y-m-d');
             $seed = hash('sha256', $daySeed . config('app.key'));
             $query->orderByRaw('CRC32(CONCAT(?, anime.id))', [$seed]);
         } else {
-            $direction = $split[1];
-            $sortBy = $split[0];
-            $query->orderBy($sortBy, $direction);
+            $sortBy = $allowedSorts[$sortKey] ?? 'id';
+            $query->orderBy($sortBy, $sortDirection);
         }
-        $requestedFilterIds = collect($filters)
+        $requestedFilterIds = collect($filtersInput)
             ->map(fn($id) => (int) $id)
             ->filter()
             ->unique()
@@ -48,7 +69,7 @@ class AnimeController extends Controller
             }
         }
 
-        $typeValues = collect(is_array($types) ? $types : [$types])
+        $typeValues = collect($typesInput)
             ->map(fn($value) => trim((string) $value))
             ->filter()
             ->values();
@@ -77,7 +98,7 @@ class AnimeController extends Controller
             $query->whereIn('type', $typeValues->all());
         }
 
-        $studioIds = collect(is_array($studiosInput) ? $studiosInput : [$studiosInput])
+        $studioIds = collect($studiosInput)
             ->map(fn($value) => (int) $value)
             ->filter()
             ->unique()
@@ -87,22 +108,62 @@ class AnimeController extends Controller
             $query->whereIn('studio_id', $studioIds->all());
         }
 
-        $age_normalize = collect(is_array($age_rating) ? $age_rating : [$age_rating])
+        $yearValues = collect($yearInput)
+            ->map(fn($value) => (int) $value)
+            ->filter(fn($value) => $value >= 1900 && $value <= 2100)
+            ->unique()
+            ->values();
+
+        if ($yearValues->isNotEmpty()) {
+            $query->whereIn('season_year', $yearValues->all());
+        }
+
+        // Keep seasons limited to known values.
+        $allowedSeasons = ['winter', 'spring', 'summer', 'fall'];
+        $seasonValues = collect($seasonInput)
+            ->map(fn($value) => (string) $value)
+            ->filter(fn($value) => in_array($value, $allowedSeasons, true))
+            ->unique()
+            ->values();
+
+        if ($seasonValues->isNotEmpty()) {
+            $query->whereIn('season', $seasonValues->all());
+        }
+
+        $ageNormalize = collect($ageRatingInput)
             ->map(fn($v) => trim((string) $v))
             ->filter()
             ->unique()
             ->values();
 
-        if (!empty($age_normalize->isNotEmpty())){
-           $query->whereIn('age_rating', $age_normalize->all());
+        if ($ageNormalize->isNotEmpty()) {
+            $query->whereIn('age_rating', $ageNormalize->all());
         }
 
         // filters list
-        $filtersList = Filter::groupedList(true);
+        // Cache reference data that changes rare.
+        $filtersList = Cache::remember('anime:filters-list', now()->addHours(6), function () {
+            return Filter::groupedList(true);
+        });
 
-        // getting studios
-        $studios = Studio::select(['id', 'name'])->orderBy('name')->get();
+        // getting studios, year and season
+        $studios = Cache::remember('anime:studios', now()->addHours(6), function () {
+            return Studio::select(['id', 'name'])->orderBy('name')->get();
+        });
         $query->with('studio');
+
+        $year = Cache::remember('anime:years', now()->addHours(6), function () {
+            return Anime::query()
+                ->whereNotNull('season_year')
+                ->select('season_year')
+                ->distinct()
+                ->orderByDesc('season_year')
+                ->pluck('season_year')
+                ->map(fn($y) => (string) $y)
+                ->values();
+        });
+
+        $season = ['winter', 'spring', 'summer', 'fall',];
 
         $perPage = 24;
         $paginator = $query->paginate($perPage)->appends($request->query());
@@ -111,6 +172,8 @@ class AnimeController extends Controller
         return response()->json([
             'anime' => $items,
             'studios' => $studios,
+            'year' => $year,
+            'season' => $season,
 
             'pagination' => [
                 'current_page'  => $paginator->currentPage(),
@@ -128,7 +191,8 @@ class AnimeController extends Controller
     }
 
     // one anime page
-    public function show(string $slug){
+    public function show(string $slug)
+    {
         $anime = Anime::query()->where('slug', $slug)->with(['studio'])->firstOrFail();
 
         return response()->json([

@@ -8,6 +8,7 @@ use App\Models\Anime;
 use App\Models\Filter;
 use App\Models\Studio;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class AnimeAdminController extends Controller
@@ -60,6 +61,7 @@ class AnimeAdminController extends Controller
         $anime = Anime::create($validated);
         $this->syncFilters($anime, $filterIds);
         $anime->load('filters:id');
+        $this->clearAnimeCaches();
 
         return response()->json([
             'message' => 'Anime created successfully',
@@ -78,6 +80,7 @@ class AnimeAdminController extends Controller
             $this->syncFilters($anime, $filterIds);
         }
         $anime->load('filters:id');
+        $this->clearAnimeCaches();
 
         return response()->json([
             'message' => 'Anime updated successfully',
@@ -95,6 +98,7 @@ class AnimeAdminController extends Controller
 
         $anime->filters()->detach();
         $anime->delete();
+        $this->clearAnimeCaches();
 
         return response()->json([
             'message' => 'Anime deleted successfully',
@@ -152,5 +156,13 @@ class AnimeAdminController extends Controller
         }
 
         $anime->filters()->sync($syncData);
+    }
+
+    private function clearAnimeCaches(): void
+    {
+        // Clear reference caches used on the public anime listing.
+        Cache::forget('anime:years');
+        Cache::forget('anime:filters-list');
+        Cache::forget('anime:studios');
     }
 }
