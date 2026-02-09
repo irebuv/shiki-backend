@@ -34,6 +34,13 @@ Route::prefix('admin')
         //anime routes
         Route::apiResource('/anime', AnimeAdminController::class)->except(['show']);
         Route::post('/anime/{anime}/image', [AnimeAdminController::class, 'uploadImage']);
+        Route::get('/anime/{anime}/episodes', [AnimeAdminController::class, 'episodes']);
+        Route::post('/anime/{anime}/episodes', [AnimeAdminController::class, 'storeEpisode']);
+        Route::delete('/anime/{anime}/episodes/{episode}', [AnimeAdminController::class, 'destroyEpisode']);
+        Route::delete('/anime/{anime}/episodes/{episode}/media/{media}', [AnimeAdminController::class, 'deleteEpisodeMedia']);
+        Route::post('/anime/{anime}/episodes/{episode}/source', [AnimeAdminController::class, 'uploadEpisodeSource']);
+        Route::post('/anime/{anime}/episodes/{episode}/transcode', [AnimeAdminController::class, 'transcodeEpisode']);
+        Route::get('/anime/{anime}/episodes/{episode}/transcode/progress', [AnimeAdminController::class, 'transcodeProgress']);
 
         //filters routes
         Route::apiResource('/filters', FilterAdminController::class)->except(['show']);
