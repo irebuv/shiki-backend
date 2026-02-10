@@ -187,6 +187,13 @@ class AnimeAdminController extends Controller
 
     public function storeEpisode(Request $request, Anime $anime)
     {
+        $activeEpisodeId = $this->getActiveAnimeTranscodeEpisodeId($anime->id);
+        if ($activeEpisodeId !== null) {
+            return response()->json([
+                'message' => "Transcoding is in progress for episode #{$activeEpisodeId}. Please wait until it finishes.",
+            ], 409);
+        }
+
         $validated = $request->validate([
             'season_number' => ['nullable', 'integer', 'min:1'],
             'episode_number' => ['required', 'integer', 'min:1'],
@@ -259,6 +266,13 @@ class AnimeAdminController extends Controller
     {
         abort_if($episode->anime_id !== $anime->id, 404);
 
+        $activeEpisodeId = $this->getActiveAnimeTranscodeEpisodeId($anime->id);
+        if ($activeEpisodeId !== null && $activeEpisodeId !== $episode->id) {
+            return response()->json([
+                'message' => "Transcoding is in progress for episode #{$activeEpisodeId}. Please wait until it finishes.",
+            ], 409);
+        }
+
         $request->validate([
             'source' => ['required', 'file', 'max:1048576'],
         ]);
@@ -292,6 +306,7 @@ class AnimeAdminController extends Controller
             'qualities' => ['nullable', 'string', 'max:255'],
             'language' => ['nullable', 'string', 'max:50'],
             'overwrite' => ['nullable', 'boolean'],
+            'keep_source' => ['nullable', 'boolean'],
         ]);
 
         $progressKey = $this->transcodeProgressKey($episode->id);
@@ -303,6 +318,14 @@ class AnimeAdminController extends Controller
             ], 409);
         }
 
+        $activeEpisodeId = $this->getActiveAnimeTranscodeEpisodeId($anime->id);
+        if ($activeEpisodeId !== null && $activeEpisodeId !== $episode->id) {
+            return response()->json([
+                'message' => "Transcoding is in progress for episode #{$activeEpisodeId}. Please wait until it finishes.",
+            ], 409);
+        }
+
+        Cache::put($this->animeTranscodeLockKey($anime->id), $episode->id, now()->addHours(6));
         Cache::put($progressKey, [
             'episode_id' => $episode->id,
             'stage' => 'probing',
@@ -319,6 +342,7 @@ class AnimeAdminController extends Controller
         $qualities = (string) ($validated['qualities'] ?? '1080');
         $language = (string) ($validated['language'] ?? 'ru');
         $overwrite = (bool) ($validated['overwrite'] ?? true);
+        $keepSource = (bool) ($validated['keep_source'] ?? false);
 
         try {
             $parts = [
@@ -333,12 +357,16 @@ class AnimeAdminController extends Controller
             if ($overwrite) {
                 $parts[] = '--overwrite';
             }
+            if ($keepSource) {
+                $parts[] = '--keep-source';
+            }
 
             $logPath = storage_path("logs/transcode-episode-{$episode->id}.log");
             $shellCommand = implode(' ', $parts) . ' >> ' . escapeshellarg($logPath) . ' 2>&1 &';
 
             Process::path(base_path())->run(['sh', '-lc', $shellCommand]);
         } catch (\Throwable $e) {
+            Cache::forget($this->animeTranscodeLockKey($anime->id));
             Cache::put($progressKey, [
                 'episode_id' => $episode->id,
                 'stage' => 'failed',
@@ -419,5 +447,27 @@ class AnimeAdminController extends Controller
     private function transcodeProgressKey(int $episodeId): string
     {
         return "anime:episode:transcode:{$episodeId}:progress";
+    }
+
+    private function animeTranscodeLockKey(int $animeId): string
+    {
+        return "anime:transcode:lock:{$animeId}";
+    }
+
+    private function getActiveAnimeTranscodeEpisodeId(int $animeId): ?int
+    {
+        $episodeId = (int) Cache::get($this->animeTranscodeLockKey($animeId), 0);
+        if ($episodeId <= 0) {
+            return null;
+        }
+
+        $progress = Cache::get($this->transcodeProgressKey($episodeId), []);
+        $stage = (string) ($progress['stage'] ?? 'idle');
+        if (in_array($stage, ['probing', 'transcoding'], true)) {
+            return $episodeId;
+        }
+
+        Cache::forget($this->animeTranscodeLockKey($animeId));
+        return null;
     }
 }

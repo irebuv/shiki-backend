@@ -14,7 +14,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Artisan::command(
-    'anime:episode:transcode {episode_id} {source} {--qualities=1080} {--language=ru} {--ffmpeg=ffmpeg} {--ffprobe=ffprobe} {--overwrite}',
+    'anime:episode:transcode {episode_id} {source} {--qualities=1080} {--language=ru} {--ffmpeg=ffmpeg} {--ffprobe=ffprobe} {--overwrite} {--keep-source}',
     function () {
         $episodeId = (int) $this->argument('episode_id');
         $episode = Episode::query()->find($episodeId);
@@ -57,6 +57,8 @@ Artisan::command(
             return 1;
         }
 
+        $animeLockKey = "anime:transcode:lock:{$episode->anime_id}";
+        try {
         $sourceArg = trim((string) $this->argument('source'));
         $sourceCandidates = [
             $sourceArg,
@@ -118,6 +120,7 @@ Artisan::command(
         $ffmpegBinary = trim((string) $this->option('ffmpeg')) ?: 'ffmpeg';
         $ffprobeBinary = trim((string) $this->option('ffprobe')) ?: 'ffprobe';
         $overwrite = (bool) $this->option('overwrite');
+        $keepSource = (bool) $this->option('keep-source');
 
         $probe = Process::timeout(30)->run([
             $ffprobeBinary,
@@ -279,10 +282,17 @@ Artisan::command(
                 $overwrite ? '-y' : '-n',
                 '-i',
                 $sourcePath,
+                // Force stable stream selection for browser/Windows playback.
+                '-map',
+                '0:v:0',
+                '-map',
+                '0:a:0?',
                 '-vf',
                 "scale='min({$preset['width']},iw)':'min({$preset['height']},ih)':force_original_aspect_ratio=decrease",
                 '-c:v',
                 'libx264',
+                '-pix_fmt',
+                'yuv420p',
                 '-preset',
                 'medium',
                 '-crf',
@@ -291,6 +301,10 @@ Artisan::command(
                 'aac',
                 '-b:a',
                 '128k',
+                '-ac',
+                '2',
+                '-ar',
+                '48000',
                 '-movflags',
                 '+faststart',
                 '-progress',
@@ -448,6 +462,38 @@ Artisan::command(
             'message' => 'Transcoding finished and media records were updated.',
             'error' => null,
         ]);
+
+        if (!$keepSource) {
+            $sourceDeleted = false;
+            $sourceDeleteAttempted = false;
+
+            $relativeLocalPath = ltrim(str_replace('\\', '/', $sourceArg), '/');
+            if ($relativeLocalPath !== '') {
+                $sourceDeleteAttempted = true;
+                $sourceDeleted = Storage::disk('local')->delete($relativeLocalPath);
+            }
+
+            if (!$sourceDeleted) {
+                $realSourcePath = realpath($sourcePath);
+                $realLocalRoot = realpath(Storage::disk('local')->path(''));
+                if (
+                    $realSourcePath !== false &&
+                    $realLocalRoot !== false &&
+                    str_starts_with($realSourcePath, $realLocalRoot . DIRECTORY_SEPARATOR)
+                ) {
+                    $sourceDeleteAttempted = true;
+                    $sourceDeleted = @unlink($realSourcePath);
+                }
+            }
+
+            if ($sourceDeleteAttempted && !$sourceDeleted) {
+                $this->warn('Transcoding finished, but source cleanup failed.');
+            }
+        }
+
         return 0;
+        } finally {
+            Cache::forget($animeLockKey);
+        }
     }
 )->purpose('Transcode one episode source into multiple MP4 qualities and store episode_media rows.');
