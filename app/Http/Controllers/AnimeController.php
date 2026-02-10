@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Anime;
+use App\Models\Episode;
 use App\Models\Filter;
 use App\Models\Studio;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 
 class AnimeController extends Controller
 {
@@ -193,10 +195,58 @@ class AnimeController extends Controller
     // one anime page
     public function show(string $slug)
     {
-        $anime = Anime::query()->where('slug', $slug)->with(['studio'])->firstOrFail();
+        $anime = Anime::query()
+            ->where('slug', $slug)
+            ->with(['studio'])
+            ->firstOrFail();
+
+        $episodes = Episode::query()
+            ->where('anime_id', $anime->id)
+            ->with([
+                'media' => fn($q) => $q->orderByDesc('is_primary')->orderBy('id'),
+            ])
+            ->orderBy('season_number')
+            ->orderBy('episode_number')
+            ->get()
+            ->map(function ($episode) {
+                $media = $episode->media->map(function ($item) {
+                    $path = (string) ($item->path ?? '');
+                    $url = $path === ''
+                        ? null
+                        : (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')
+                            ? $path
+                            : Storage::url($path));
+
+                    return [
+                        'id' => $item->id,
+                        'type' => $item->type,
+                        'quality' => $item->quality,
+                        'path' => $item->path,
+                        'url' => $url,
+                        'mime' => $item->mime,
+                        'size' => $item->size,
+                        'duration' => $item->duration,
+                        'language' => $item->language,
+                        'is_primary' => (bool) $item->is_primary,
+                    ];
+                })->values();
+
+                return [
+                    'id' => $episode->id,
+                    'season_number' => $episode->season_number,
+                    'episode_number' => $episode->episode_number,
+                    'title' => $episode->title,
+                    'description' => $episode->description,
+                    'duration' => $episode->duration,
+                    'air_date' => $episode->air_date,
+                    'media' => $media,
+                ];
+            })
+            ->values();
 
         return response()->json([
             'anime' => $anime,
+            'episode_items' => $episodes,
         ]);
     }
 }

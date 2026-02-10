@@ -1,6 +1,6 @@
 FROM php:8.3-cli
 
-RUN apt-get update && apt-get install -y unzip git curl \
+RUN apt-get update && apt-get install -y unzip git curl ffmpeg \
     && docker-php-ext-install pdo pdo_mysql opcache
 
 # ✅ install composer
@@ -8,5 +8,6 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # ✅ opcache cli ini
 COPY php-conf/99-opcache-cli.ini /usr/local/etc/php/conf.d/99-opcache-cli.ini
+COPY php-conf/99-upload-limits.ini /usr/local/etc/php/conf.d/99-upload-limits.ini
 
 WORKDIR /app
