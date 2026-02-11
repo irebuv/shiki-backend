@@ -244,9 +244,39 @@ class AnimeController extends Controller
             })
             ->values();
 
+        $relatedItems = $anime->outgoingRelations()
+            ->with(['relatedAnime:id,name,slug,featured_image,season_year,season,type,status'])
+            ->orderBy('relation_type')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(function ($relation) {
+                $related = $relation->relatedAnime;
+                $image = (string) ($related?->featured_image ?? '');
+
+                return [
+                    'id' => $relation->id,
+                    'relation_type' => $relation->relation_type,
+                    'sort_order' => $relation->sort_order,
+                    'related_anime' => $related ? [
+                        'id' => $related->id,
+                        'name' => $related->name,
+                        'slug' => $related->slug,
+                        'type' => $related->type,
+                        'status' => $related->status,
+                        'season_year' => $related->season_year,
+                        'season' => $related->season,
+                        'featured_image' => $related->featured_image,
+                        'featured_image_url' => $image === '' ? null : Storage::url($image),
+                    ] : null,
+                ];
+            })
+            ->values();
+
         return response()->json([
             'anime' => $anime,
             'episode_items' => $episodes,
+            'related_items' => $relatedItems,
         ]);
     }
 }

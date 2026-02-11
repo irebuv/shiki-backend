@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\AnimeAdminController;
+use App\Http\Controllers\Admin\AnimeEpisodeAdminController;
+use App\Http\Controllers\Admin\AnimeRelationAdminController;
 use App\Http\Controllers\Admin\FilterAdminController;
 use App\Http\Controllers\Admin\FilterGroupAdminController;
 use App\Http\Controllers\Admin\StudioAdminController;
@@ -34,13 +36,18 @@ Route::prefix('admin')
         //anime routes
         Route::apiResource('/anime', AnimeAdminController::class)->except(['show']);
         Route::post('/anime/{anime}/image', [AnimeAdminController::class, 'uploadImage']);
-        Route::get('/anime/{anime}/episodes', [AnimeAdminController::class, 'episodes']);
-        Route::post('/anime/{anime}/episodes', [AnimeAdminController::class, 'storeEpisode']);
-        Route::delete('/anime/{anime}/episodes/{episode}', [AnimeAdminController::class, 'destroyEpisode']);
-        Route::delete('/anime/{anime}/episodes/{episode}/media/{media}', [AnimeAdminController::class, 'deleteEpisodeMedia']);
-        Route::post('/anime/{anime}/episodes/{episode}/source', [AnimeAdminController::class, 'uploadEpisodeSource']);
-        Route::post('/anime/{anime}/episodes/{episode}/transcode', [AnimeAdminController::class, 'transcodeEpisode']);
-        Route::get('/anime/{anime}/episodes/{episode}/transcode/progress', [AnimeAdminController::class, 'transcodeProgress']);
+        Route::get('/anime/{anime}/episodes', [AnimeEpisodeAdminController::class, 'episodes']);
+        Route::post('/anime/{anime}/episodes', [AnimeEpisodeAdminController::class, 'storeEpisode']);
+        Route::delete('/anime/{anime}/episodes/{episode}', [AnimeEpisodeAdminController::class, 'destroyEpisode']);
+        Route::delete('/anime/{anime}/episodes/{episode}/media/{media}', [AnimeEpisodeAdminController::class, 'deleteEpisodeMedia']);
+        Route::post('/anime/{anime}/episodes/{episode}/source', [AnimeEpisodeAdminController::class, 'uploadEpisodeSource']);
+        Route::post('/anime/{anime}/episodes/{episode}/transcode', [AnimeEpisodeAdminController::class, 'transcodeEpisode']);
+        Route::get('/anime/{anime}/episodes/{episode}/transcode/progress', [AnimeEpisodeAdminController::class, 'transcodeProgress']);
+        Route::get('/anime/{anime}/relations', [AnimeRelationAdminController::class, 'relations']);
+        Route::get('/anime/{anime}/relations/candidates', [AnimeRelationAdminController::class, 'relationCandidates']);
+        Route::post('/anime/{anime}/relations', [AnimeRelationAdminController::class, 'storeRelation']);
+        Route::patch('/anime/{anime}/relations/{relation}', [AnimeRelationAdminController::class, 'updateRelation']);
+        Route::delete('/anime/{anime}/relations/{relation}', [AnimeRelationAdminController::class, 'destroyRelation']);
 
         //filters routes
         Route::apiResource('/filters', FilterAdminController::class)->except(['show']);
