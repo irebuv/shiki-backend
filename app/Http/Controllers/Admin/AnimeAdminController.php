@@ -17,7 +17,7 @@ class AnimeAdminController extends Controller
     {
         $query = Anime::query();
 
-        $query->orderBy('id', 'desc');
+        $query->orderBy('updated_at', 'desc');
 
         $query->with('filters:id');
 

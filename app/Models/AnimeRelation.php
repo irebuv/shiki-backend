@@ -14,12 +14,14 @@ class AnimeRelation extends Model
         'related_anime_id',
         'relation_type',
         'sort_order',
+        'pair_key',
     ];
 
     protected $casts = [
         'anime_id' => 'integer',
         'related_anime_id' => 'integer',
         'sort_order' => 'integer',
+        'pair_key' => 'string',
     ];
 
     public function anime(): BelongsTo
@@ -32,4 +34,3 @@ class AnimeRelation extends Model
         return $this->belongsTo(Anime::class, 'related_anime_id');
     }
 }
-

@@ -46,7 +46,8 @@ Route::prefix('admin')
         Route::get('/anime/{anime}/relations', [AnimeRelationAdminController::class, 'relations']);
         Route::get('/anime/{anime}/relations/candidates', [AnimeRelationAdminController::class, 'relationCandidates']);
         Route::post('/anime/{anime}/relations', [AnimeRelationAdminController::class, 'storeRelation']);
-        Route::patch('/anime/{anime}/relations/{relation}', [AnimeRelationAdminController::class, 'updateRelation']);
+        Route::post('/anime/{anime}/relations/reorder', [AnimeRelationAdminController::class, 'reorderRelations']);
+        Route::delete('/anime/{anime}/relations/current', [AnimeRelationAdminController::class, 'detachCurrentFromGroup']);
         Route::delete('/anime/{anime}/relations/{relation}', [AnimeRelationAdminController::class, 'destroyRelation']);
 
         //filters routes

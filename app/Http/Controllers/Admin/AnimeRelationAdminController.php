@@ -4,28 +4,51 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Anime;
-use App\Models\AnimeRelation;
+use App\Models\AnimeRelationGroup;
+use App\Models\AnimeRelationGroupItem;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class AnimeRelationAdminController extends Controller
 {
     public function relations(Anime $anime)
     {
-        $relations = AnimeRelation::query()
-            ->where('anime_id', $anime->id)
-            ->with(['relatedAnime:id,name,slug,featured_image,season_year,season,type,status'])
-            ->orderBy('relation_type')
+        $sourceGroupItem = $this->groupItemForAnime($anime->id);
+
+        if ($sourceGroupItem === null) {
+            return response()->json([
+                'relations' => [],
+                'group' => null,
+            ]);
+        }
+
+        $items = AnimeRelationGroupItem::query()
+            ->with([
+                'anime:id,name,slug,featured_image,season_year,season,type,status',
+                'group:id,group_key',
+            ])
+            ->where('group_id', $sourceGroupItem->group_id)
             ->orderBy('sort_order')
             ->orderBy('id')
-            ->get()
-            ->map(fn(AnimeRelation $relation) => $this->serializeRelation($relation))
+            ->get();
+
+        $relations = $items
+            ->map(fn(AnimeRelationGroupItem $item) => $this->serializeGroupItem($item, $anime->id))
             ->values();
+
+        /** @var AnimeRelationGroup|null $group */
+        $group = $items->first()?->group;
 
         return response()->json([
             'relations' => $relations,
+            'group' => $group ? [
+                'id' => $group->id,
+                'group_key' => $group->group_key,
+                'count' => $items->count(),
+            ] : null,
         ]);
     }
 
@@ -39,6 +62,9 @@ class AnimeRelationAdminController extends Controller
         $queryText = trim((string) ($validated['q'] ?? ''));
         $limit = (int) ($validated['limit'] ?? 20);
 
+        $sourceGroupItem = $this->groupItemForAnime($anime->id);
+        $sourceGroupId = (int) ($sourceGroupItem?->group_id ?? 0);
+
         $query = Anime::query()
             ->select(['id', 'name', 'slug', 'featured_image', 'season_year', 'season', 'type', 'status'])
             ->where('id', '!=', $anime->id)
@@ -48,11 +74,63 @@ class AnimeRelationAdminController extends Controller
             $query->where('name', 'like', '%' . $queryText . '%');
         }
 
-        $items = $query
+        if ($sourceGroupId > 0) {
+            $excludeAnimeIds = AnimeRelationGroupItem::query()
+                ->where('group_id', $sourceGroupId)
+                ->pluck('anime_id')
+                ->map(fn($id) => (int) $id)
+                ->all();
+
+            if (!empty($excludeAnimeIds)) {
+                $query->whereNotIn('id', $excludeAnimeIds);
+            }
+        }
+
+        $candidates = $query
             ->limit($limit)
+            ->get();
+
+        $candidateIds = $candidates
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+
+        $candidateGroupItems = AnimeRelationGroupItem::query()
+            ->whereIn('anime_id', $candidateIds)
             ->get()
-            ->map(function (Anime $item) {
+            ->keyBy('anime_id');
+
+        $groupIds = $candidateGroupItems
+            ->pluck('group_id')
+            ->map(fn($id) => (int) $id)
+            ->filter(fn($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $groupAnchors = AnimeRelationGroupItem::query()
+            ->with([
+                'anime:id,name,slug',
+                'group:id,group_key',
+            ])
+            ->whereIn('group_id', $groupIds)
+            ->orderBy('group_id')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('group_id')
+            ->map(fn($rows) => $rows->first());
+
+        $items = $candidates
+            ->map(function (Anime $item) use ($candidateGroupItems, $groupAnchors, $sourceGroupId) {
                 $image = (string) ($item->featured_image ?? '');
+                /** @var AnimeRelationGroupItem|null $candidateGroupItem */
+                $candidateGroupItem = $candidateGroupItems->get($item->id);
+                $candidateGroupId = (int) ($candidateGroupItem?->group_id ?? 0);
+                /** @var AnimeRelationGroupItem|null $anchor */
+                $anchor = $candidateGroupId > 0
+                    ? $groupAnchors->get($candidateGroupId)
+                    : null;
 
                 return [
                     'id' => $item->id,
@@ -64,6 +142,16 @@ class AnimeRelationAdminController extends Controller
                     'season' => $item->season,
                     'featured_image' => $item->featured_image,
                     'featured_image_url' => $image === '' ? null : Storage::url($image),
+                    'relation_group' => $candidateGroupId > 0 ? [
+                        'id' => $candidateGroupId,
+                        'group_key' => (string) ($anchor?->group?->group_key ?? ''),
+                        'anchor_anime' => $anchor?->anime ? [
+                            'id' => $anchor->anime->id,
+                            'name' => $anchor->anime->name,
+                            'slug' => $anchor->anime->slug,
+                        ] : null,
+                    ] : null,
+                    'is_in_other_group' => $candidateGroupId > 0 && $candidateGroupId !== $sourceGroupId,
                 ];
             })
             ->values();
@@ -77,137 +165,268 @@ class AnimeRelationAdminController extends Controller
     {
         $validated = $request->validate([
             'related_anime_id' => ['required', 'integer', 'exists:anime,id', 'not_in:' . $anime->id],
-            'relation_type' => ['required', 'string', 'max:32', Rule::in($this->relationTypes())],
-            'sort_order' => ['nullable', 'integer', 'min:0', 'max:1000000'],
         ]);
 
-        $relationType = (string) $validated['relation_type'];
-        $sortOrder = array_key_exists('sort_order', $validated)
-            ? (int) $validated['sort_order']
-            : ((int) AnimeRelation::query()
-                ->where('anime_id', $anime->id)
-                ->where('relation_type', $relationType)
-                ->max('sort_order')) + 1;
+        $relatedAnimeId = (int) $validated['related_anime_id'];
+
+        $sourceGroupItem = $this->groupItemForAnime($anime->id);
+        $candidateGroupItem = $this->groupItemForAnime($relatedAnimeId);
+
+        $sourceGroupId = (int) ($sourceGroupItem?->group_id ?? 0);
+        $candidateGroupId = (int) ($candidateGroupItem?->group_id ?? 0);
+
+        if ($sourceGroupId > 0 && $candidateGroupId > 0 && $sourceGroupId === $candidateGroupId) {
+            return response()->json([
+                'message' => 'This anime is already in the same relations group.',
+            ], 409);
+        }
+
+        if ($sourceGroupId > 0 && $candidateGroupId > 0 && $sourceGroupId !== $candidateGroupId) {
+            return response()->json([
+                'message' => 'Candidate anime already belongs to another relations group.',
+                'source_group_id' => $sourceGroupId,
+                'candidate_group_id' => $candidateGroupId,
+            ], 409);
+        }
 
         try {
-            $relation = AnimeRelation::query()->updateOrCreate(
-                [
-                    'anime_id' => $anime->id,
-                    'related_anime_id' => (int) $validated['related_anime_id'],
-                    'relation_type' => $relationType,
-                ],
-                [
-                    'sort_order' => $sortOrder,
-                ],
-            );
+            $resultItem = DB::transaction(function () use (
+                $anime,
+                $relatedAnimeId,
+                $sourceGroupId,
+                $candidateGroupId,
+            ) {
+                if ($sourceGroupId === 0 && $candidateGroupId === 0) {
+                    $group = AnimeRelationGroup::query()->create([
+                        'group_key' => (string) Str::uuid(),
+                    ]);
+
+                    AnimeRelationGroupItem::query()->create([
+                        'group_id' => $group->id,
+                        'anime_id' => $anime->id,
+                        'sort_order' => 1,
+                    ]);
+
+                    return AnimeRelationGroupItem::query()->create([
+                        'group_id' => $group->id,
+                        'anime_id' => $relatedAnimeId,
+                        'sort_order' => 2,
+                    ]);
+                }
+
+                if ($sourceGroupId > 0 && $candidateGroupId === 0) {
+                    return AnimeRelationGroupItem::query()->create([
+                        'group_id' => $sourceGroupId,
+                        'anime_id' => $relatedAnimeId,
+                        'sort_order' => $this->nextSortOrder($sourceGroupId),
+                    ]);
+                }
+
+                if ($sourceGroupId === 0 && $candidateGroupId > 0) {
+                    AnimeRelationGroupItem::query()->create([
+                        'group_id' => $candidateGroupId,
+                        'anime_id' => $anime->id,
+                        'sort_order' => $this->nextSortOrder($candidateGroupId),
+                    ]);
+
+                    return AnimeRelationGroupItem::query()
+                        ->where('group_id', $candidateGroupId)
+                        ->where('anime_id', $relatedAnimeId)
+                        ->firstOrFail();
+                }
+
+                throw new \RuntimeException('Unexpected relation group state.');
+            });
         } catch (QueryException $e) {
             return response()->json([
-                'message' => 'Could not save relation.',
+                'message' => 'Could not save relation group item.',
                 'error' => $e->getMessage(),
             ], 422);
         }
 
-        $relation->load('relatedAnime:id,name,slug,featured_image,season_year,season,type,status');
+        $resultItem->load('anime:id,name,slug,featured_image,season_year,season,type,status');
 
         return response()->json([
-            'message' => 'Relation saved successfully',
-            'relation' => $this->serializeRelation($relation),
+            'message' => 'Anime added to relations group successfully.',
+            'relation' => $this->serializeGroupItem($resultItem, $anime->id),
         ], 201);
     }
 
-    public function updateRelation(Request $request, Anime $anime, AnimeRelation $relation)
+    public function reorderRelations(Request $request, Anime $anime)
     {
-        abort_if($relation->anime_id !== $anime->id, 404);
-
         $validated = $request->validate([
-            'related_anime_id' => ['nullable', 'integer', 'exists:anime,id', 'not_in:' . $anime->id],
-            'relation_type' => ['nullable', 'string', 'max:32', Rule::in($this->relationTypes())],
-            'sort_order' => ['nullable', 'integer', 'min:0', 'max:1000000'],
+            'related_ids' => ['required', 'array', 'min:2'],
+            'related_ids.*' => ['integer', 'distinct', 'exists:anime,id'],
         ]);
 
-        $nextRelatedAnimeId = (int) ($validated['related_anime_id'] ?? $relation->related_anime_id);
-        $nextRelationType = (string) ($validated['relation_type'] ?? $relation->relation_type);
-
-        $duplicateExists = AnimeRelation::query()
-            ->where('anime_id', $anime->id)
-            ->where('related_anime_id', $nextRelatedAnimeId)
-            ->where('relation_type', $nextRelationType)
-            ->where('id', '!=', $relation->id)
-            ->exists();
-
-        if ($duplicateExists) {
+        $sourceGroupItem = $this->groupItemForAnime($anime->id);
+        if ($sourceGroupItem === null) {
             return response()->json([
-                'message' => 'This relation already exists.',
-            ], 409);
+                'message' => 'Anime is not in any relations group.',
+            ], 422);
         }
 
-        $relation->update([
-            'related_anime_id' => $nextRelatedAnimeId,
-            'relation_type' => $nextRelationType,
-            'sort_order' => array_key_exists('sort_order', $validated)
-                ? (int) $validated['sort_order']
-                : $relation->sort_order,
-        ]);
+        $groupId = (int) $sourceGroupItem->group_id;
 
-        $relation->load('relatedAnime:id,name,slug,featured_image,season_year,season,type,status');
+        $groupAnimeIds = AnimeRelationGroupItem::query()
+            ->where('group_id', $groupId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->pluck('anime_id')
+            ->map(fn($id) => (int) $id)
+            ->values();
+
+        $orderedIds = collect($validated['related_ids'])
+            ->map(fn($id) => (int) $id)
+            ->values();
+
+        if (
+            $orderedIds->count() !== $groupAnimeIds->count()
+            || $orderedIds->diff($groupAnimeIds)->isNotEmpty()
+            || $groupAnimeIds->diff($orderedIds)->isNotEmpty()
+        ) {
+            return response()->json([
+                'message' => 'The order list must contain all anime from the current relations group exactly once.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($groupId, $orderedIds) {
+            foreach ($orderedIds as $index => $animeId) {
+                AnimeRelationGroupItem::query()
+                    ->where('group_id', $groupId)
+                    ->where('anime_id', $animeId)
+                    ->update(['sort_order' => $index + 1]);
+            }
+        });
 
         return response()->json([
-            'message' => 'Relation updated successfully',
-            'relation' => $this->serializeRelation($relation),
+            'message' => 'Relations order updated successfully.',
         ]);
     }
 
-    public function destroyRelation(Anime $anime, AnimeRelation $relation)
+    public function destroyRelation(Anime $anime, AnimeRelationGroupItem $relation)
     {
-        abort_if($relation->anime_id !== $anime->id, 404);
+        $sourceGroupItem = $this->groupItemForAnime($anime->id);
+        if ($sourceGroupItem === null) {
+            return response()->json([
+                'message' => 'Anime is not in any relations group.',
+            ], 404);
+        }
 
-        $relation->delete();
+        if ((int) $relation->group_id !== (int) $sourceGroupItem->group_id) {
+            return response()->json([
+                'message' => 'Relation item not found in this anime group.',
+            ], 404);
+        }
+
+        $groupId = (int) $sourceGroupItem->group_id;
+
+        DB::transaction(function () use ($relation, $groupId) {
+            $relation->delete();
+            $this->normalizeSortOrder($groupId);
+            $this->cleanupGroupIfTooSmall($groupId);
+        });
 
         return response()->json([
-            'message' => 'Relation deleted successfully',
+            'message' => 'Relation deleted successfully.',
         ]);
     }
 
-    private function relationTypes(): array
+    public function detachCurrentFromGroup(Anime $anime)
     {
-        return [
-            'sequel',
-            'prequel',
-            'movie',
-            'ova',
-            'ona',
-            'side_story',
-            'special',
-            'alternative',
-            'other',
-        ];
+        $sourceGroupItem = $this->groupItemForAnime($anime->id);
+        if ($sourceGroupItem === null) {
+            return response()->json([
+                'message' => 'Anime is not in any relations group.',
+            ]);
+        }
+
+        $groupId = (int) $sourceGroupItem->group_id;
+
+        DB::transaction(function () use ($sourceGroupItem, $groupId) {
+            $sourceGroupItem->delete();
+            $this->normalizeSortOrder($groupId);
+            $this->cleanupGroupIfTooSmall($groupId);
+        });
+
+        return response()->json([
+            'message' => 'Anime removed from relations group.',
+        ]);
     }
 
-    private function serializeRelation(AnimeRelation $relation): array
+    private function groupItemForAnime(int $animeId): ?AnimeRelationGroupItem
     {
-        $related = $relation->relatedAnime;
-        $image = (string) ($related?->featured_image ?? '');
+        return AnimeRelationGroupItem::query()
+            ->where('anime_id', $animeId)
+            ->first();
+    }
+
+    private function nextSortOrder(int $groupId): int
+    {
+        return ((int) AnimeRelationGroupItem::query()
+            ->where('group_id', $groupId)
+            ->max('sort_order')) + 1;
+    }
+
+    private function normalizeSortOrder(int $groupId): void
+    {
+        $itemIds = AnimeRelationGroupItem::query()
+            ->where('group_id', $groupId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        foreach (array_values($itemIds) as $index => $itemId) {
+            AnimeRelationGroupItem::query()
+                ->where('id', (int) $itemId)
+                ->update(['sort_order' => $index + 1]);
+        }
+    }
+
+    private function cleanupGroupIfTooSmall(int $groupId): void
+    {
+        $count = (int) AnimeRelationGroupItem::query()
+            ->where('group_id', $groupId)
+            ->count();
+
+        if ($count >= 2) {
+            return;
+        }
+
+        AnimeRelationGroupItem::query()
+            ->where('group_id', $groupId)
+            ->delete();
+
+        AnimeRelationGroup::query()
+            ->where('id', $groupId)
+            ->delete();
+    }
+
+    private function serializeGroupItem(AnimeRelationGroupItem $item, int $sourceAnimeId): array
+    {
+        $anime = $item->anime;
+        $image = (string) ($anime?->featured_image ?? '');
 
         return [
-            'id' => $relation->id,
-            'anime_id' => $relation->anime_id,
-            'related_anime_id' => $relation->related_anime_id,
-            'relation_type' => $relation->relation_type,
-            'sort_order' => $relation->sort_order,
-            'created_at' => optional($relation->created_at)?->toIso8601String(),
-            'updated_at' => optional($relation->updated_at)?->toIso8601String(),
-            'related_anime' => $related ? [
-                'id' => $related->id,
-                'name' => $related->name,
-                'slug' => $related->slug,
-                'type' => $related->type,
-                'status' => $related->status,
-                'season_year' => $related->season_year,
-                'season' => $related->season,
-                'featured_image' => $related->featured_image,
+            'id' => $item->id,
+            'related_anime_id' => (int) $item->anime_id,
+            'sort_order' => (int) $item->sort_order,
+            'group_id' => (int) $item->group_id,
+            'is_current' => (int) $item->anime_id === $sourceAnimeId,
+            'created_at' => optional($item->created_at)?->toIso8601String(),
+            'updated_at' => optional($item->updated_at)?->toIso8601String(),
+            'related_anime' => $anime ? [
+                'id' => $anime->id,
+                'name' => $anime->name,
+                'slug' => $anime->slug,
+                'type' => $anime->type,
+                'status' => $anime->status,
+                'season_year' => $anime->season_year,
+                'season' => $anime->season,
+                'featured_image' => $anime->featured_image,
                 'featured_image_url' => $image === '' ? null : Storage::url($image),
             ] : null,
         ];
     }
 }
-
