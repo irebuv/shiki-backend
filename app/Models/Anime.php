@@ -5,6 +5,7 @@ namespace App\Models;
 use Cviebrock\EloquentSluggable\Sluggable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Anime extends Model
@@ -54,6 +55,12 @@ class Anime extends Model
     {
         return $this->belongsTo(Studio::class);
     }
+
+    public function relationGroupItem(): HasOne
+    {
+        return $this->hasOne(AnimeRelationGroupItem::class, 'anime_id');
+    }
+
     public function sluggable(): array
     {
         return [

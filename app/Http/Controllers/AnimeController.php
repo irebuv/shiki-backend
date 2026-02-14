@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Anime;
+use App\Models\AnimeRelationGroupItem;
+use App\Models\AnimeSimilar;
 use App\Models\Episode;
 use App\Models\Filter;
 use App\Models\Studio;
@@ -244,9 +246,86 @@ class AnimeController extends Controller
             })
             ->values();
 
+        $groupItem = AnimeRelationGroupItem::query()
+            ->where('anime_id', $anime->id)
+            ->first();
+
+        //Similar anime
+        $similarItems = AnimeSimilar::query()
+            ->with('similarAnime:id,name,slug,featured_image,season_year,season,type,status')
+            ->where('anime_id', $anime->id)
+            ->orderBy('position')
+            ->orderByDesc('score')
+            ->limit(12)
+            ->get()
+            ->map(function (AnimeSimilar $item) {
+                $related = $item->similarAnime;
+                if ($related === null) {
+                    return null;
+                }
+
+                $image = (string) ($related->featured_image ?? '');
+
+                return [
+                    'id' => $item->id,
+                    'name' => $related->name,
+                    'slug' => $related->slug,
+                    'type' => $related->type,
+                    'status' => $related->status,
+                    'season_year' => $related->season_year,
+                    'season' => $related->season,
+                    'featured_image' => $related->featured_image,
+                ];
+            })
+            ->filter()
+            ->values();
+
+
+        //Related anime
+        $relatedItems = collect();
+
+        if ($groupItem !== null) {
+            $currentAnimeId = (int) $anime->id;
+
+            $relatedItems = AnimeRelationGroupItem::query()
+                ->with('anime:id,name,slug,featured_image,season_year,season,type,status')
+                ->where('group_id', $groupItem->group_id)
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(function (AnimeRelationGroupItem $item) use ($currentAnimeId) {
+                    $related = $item->anime;
+                    if ($related === null) {
+                        return null;
+                    }
+
+                    $image = (string) ($related->featured_image ?? '');
+
+                    return [
+                        'id' => $item->id,
+                        'sort_order' => (int) $item->sort_order,
+                        'is_current' => (int) $item->anime_id === $currentAnimeId,
+                        'related_anime' => [
+                            'id' => $related->id,
+                            'name' => $related->name,
+                            'slug' => $related->slug,
+                            'type' => $related->type,
+                            'status' => $related->status,
+                            'season_year' => $related->season_year,
+                            'season' => $related->season,
+                            'featured_image' => $related->featured_image,
+                        ],
+                    ];
+                })
+                ->filter()
+                ->values();
+        }
+
         return response()->json([
             'anime' => $anime,
             'episode_items' => $episodes,
+            'related_items' => $relatedItems,
+            'similar_items' => $similarItems,
         ]);
     }
 }
