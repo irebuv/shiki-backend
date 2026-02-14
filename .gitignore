@@ -17,6 +17,9 @@ AGENTS.md
 /node_modules
 /public/build
 /public/hot
+/public/storage
+/storage
+/bootstrap/cache
 /storage/*.key
 /storage/pail
 /vendor
