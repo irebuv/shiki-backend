@@ -7,12 +7,14 @@ use App\Http\Resources\AnimeResource;
 use App\Models\Anime;
 use App\Models\Filter;
 use App\Models\Studio;
+use App\Services\AnimeSimilarService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class AnimeAdminController extends Controller
 {
+
     public function index(Request $request)
     {
         $query = Anime::query();
@@ -48,14 +50,16 @@ class AnimeAdminController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AnimeSimilarService $similarService)
     {
         $validated = $request->validate(AnimeResource::validationRules());
         $filterIds = $validated['filter_ids'] ?? [];
         unset($validated['filter_ids']);
 
         $anime = Anime::create($validated);
+
         $this->syncFilters($anime, $filterIds);
+        $similarService->rebuildForAnime($anime, 12);
         $anime->load('filters:id');
         $this->clearAnimeCaches();
 
@@ -65,7 +69,7 @@ class AnimeAdminController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, Anime $anime)
+    public function update(Request $request, Anime $anime, AnimeSimilarService $similarService)
     {
         $validated = $request->validate(AnimeResource::validationRules());
         $filterIds = $validated['filter_ids'] ?? null;
@@ -75,6 +79,8 @@ class AnimeAdminController extends Controller
         if (is_array($filterIds)) {
             $this->syncFilters($anime, $filterIds);
         }
+
+        $similarService->rebuildForAnime($anime, 12);
 
         $anime->load('filters:id');
         $this->clearAnimeCaches();

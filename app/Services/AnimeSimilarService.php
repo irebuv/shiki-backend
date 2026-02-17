@@ -8,6 +8,7 @@ use App\Models\AnimeSimilar;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
+
 class AnimeSimilarService
 {
     public function rebuildForAnime(Anime $anime, int $limit = 12): void
@@ -27,7 +28,7 @@ class AnimeSimilarService
         }
 
         $excludedAnimeIds = $excludedAnimeIds
-            ->map(fn ($id) => (int) $id)
+            ->map(fn($id) => (int) $id)
             ->unique()
             ->values()
             ->all();
@@ -88,6 +89,23 @@ class AnimeSimilarService
                 );
             }
         });
+
+        Anime::withoutTimestamps(function () use ($anime): void {
+            $anime->forceFill([
+                'similar_rebuilt_at' => now(),
+            ])->saveQuietly();
+        });
+    }
+
+    public function rebuildByAnimeId(int $animeId, int $limit = 12): bool
+    {
+        $anime = Anime::query()->find($animeId);
+        if (!$anime) {
+            return false;
+        }
+
+        $this->rebuildForAnime($anime, $limit);
+        return true;
     }
 
     public function rebuildAll(int $limit = 12): void
