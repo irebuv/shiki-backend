@@ -15,7 +15,7 @@ class RebuildAnimeSimilarsCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'anime:rebuild-similars {anime_id?} {--limit=12} {--scope=all} {--queue} {--chunk=200}';
+    protected $signature = 'anime:rebuild-similars {anime_id?} {--limit=} {--scope=all} {--queue} {--chunk=200}';
 
     /**
      * The console command description.
@@ -29,13 +29,15 @@ class RebuildAnimeSimilarsCommand extends Command
      */
     public function handle(AnimeSimilarService $service, AnimeSimilarDispatchService $dispatchService): int
     {
-        $limit = max(1, (int) $this->option('limit'));
+        $limitOption = $this->option('limit');
+        $limitRaw = ($limitOption === null || $limitOption === '') ? null : (int) $limitOption;
         $chunk = max(50, (int) $this->option('chunk'));
         $animeId = $this->argument('anime_id');
         $queue = (bool) $this->option('queue');
 
         try {
             $scope = $dispatchService->normalizeScope((string) $this->option('scope'));
+            $limit = $dispatchService->normalizeLimit($limitRaw);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
             return self::FAILURE;

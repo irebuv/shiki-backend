@@ -55,6 +55,8 @@ Route::prefix('admin')
         Route::post('/anime/similars/rebuild', [AnimeSimilarAdminController::class, 'rebuildNow']);
         Route::get('/anime/similars/status', [AnimeSimilarAdminController::class, 'status']);
         Route::delete('/anime/similars/queue', [AnimeSimilarAdminController::class, 'clearQueue']);
+        Route::get('/anime/similars/settings', [AnimeSimilarAdminController::class, 'settings']);
+        Route::put('/anime/similars/settings', [AnimeSimilarAdminController::class, 'updateSettings']);
 
         //filters routes
         Route::apiResource('/filters', FilterAdminController::class)->except(['show']);

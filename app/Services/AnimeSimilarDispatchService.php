@@ -23,6 +23,10 @@ class AnimeSimilarDispatchService
         self::SCOPE_THREE_MONTHS,
     ];
 
+    public function __construct(
+        private readonly AnimeSimilarSettingsService $settingsService
+    ) {}
+
     public function normalizeScope(?string $scope): string
     {
         $value = strtolower(trim((string) $scope));
@@ -37,15 +41,22 @@ class AnimeSimilarDispatchService
         return $value;
     }
 
-    public function dispatchOne(int $animeId, int $limit = 12): void
+    public function normalizeLimit(?int $limit): int
     {
+        return $this->settingsService->normalizeLimit($limit ?? $this->settingsService->getLimit());
+    }
+
+    public function dispatchOne(int $animeId, ?int $limit = null): void
+    {
+        $limit = $this->normalizeLimit($limit);
         RebuildAnimeSimilarsJob::dispatch($animeId, $limit);
     }
 
-    public function dispatchByScope(string $scope, int $limit = 12, int $chunk = 200, ?\DateTimeInterface $startAt = null): int
+    public function dispatchByScope(string $scope, ?int $limit = null, int $chunk = 200, ?\DateTimeInterface $startAt = null): int
     {
         $scope = $this->normalizeScope($scope);
         $cutoff = $this->cutoffForScope($scope);
+        $limit = $this->normalizeLimit($limit);
 
         $queued = 0;
         $query = Anime::query()->select('id')->orderBy('id');
@@ -58,7 +69,7 @@ class AnimeSimilarDispatchService
 
         $baseDelay = $startAt ? max(0, now()->diffInSeconds($startAt, false)) : 0;
         $delaySeconds = $baseDelay;
-        $step = 5;
+        $step = max(1, (int) config('similar.rebuild.delay_step_seconds', 5));
 
         $query->chunkById($chunk, function ($rows) use ($limit, &$queued, &$delaySeconds, $step) {
             foreach ($rows as $row) {

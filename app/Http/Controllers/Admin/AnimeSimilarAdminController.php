@@ -4,13 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\AnimeSimilarDispatchService;
+use App\Services\AnimeSimilarSettingsService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AnimeSimilarAdminController extends Controller
 {
-
     public function status()
     {
         $jobsQuery = DB::table('jobs')->where('payload', 'like', '%RebuildAnimeSimilarsJob%');
@@ -38,18 +38,64 @@ class AnimeSimilarAdminController extends Controller
         ]);
     }
 
-    public function rebuildNow(Request $request, AnimeSimilarDispatchService $dispatchService)
+    public function settings(AnimeSimilarSettingsService $settingsService)
+    {
+        $cfg = $settingsService->constraints();
+
+        return response()->json([
+            'message' => 'Similar setting',
+            'data' => [
+                'limit' => $settingsService->getLimit(),
+                'min' => $cfg['min'],
+                'max' => $cfg['max'],
+                'step' => $cfg['step'],
+            ],
+            'errors' => null,
+        ]);
+    }
+
+    public function updateSettings(Request $request, AnimeSimilarSettingsService $settingsService)
+    {
+        $cfg = $settingsService->constraints();
+
+        $validated = $request->validate([
+            'limit' => [
+                'required',
+                'integer',
+                "min:{$cfg['min']}",
+                "max:{$cfg['max']}",
+                function (string $attribute, mixed $value, \Closure $fail) use ($cfg) {
+                    if (((int) $value) % $cfg['step'] !== 0) {
+                        $fail("The {$attribute} must be a multiple of {$cfg['step']}.");
+                    }
+                },
+            ],
+        ]);
+
+        $limit = $settingsService->setLimit((int) $validated['limit']);
+
+        return response()->json([
+            'message' => 'Similar limit updated.',
+            'data' => [
+                'limit' => $limit,
+                'min' => $cfg['min'],
+                'max' => $cfg['max'],
+                'step' => $cfg['step'],
+            ],
+            'errors' => null,
+        ]);
+    }
+
+    public function rebuildNow(Request $request, AnimeSimilarDispatchService $dispatchService, AnimeSimilarSettingsService $settingsService)
     {
         $validated = $request->validate([
             'scope' => ['nullable', 'string', 'in:all,week,month,two_months,three_months'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             'chunk' => ['nullable', 'integer', 'min:50', 'max:1000'],
             'defer_to_night' => ['nullable', 'boolean'],
         ]);
 
         $scope = $dispatchService->normalizeScope($validated['scope'] ?? 'three_months');
-        $limit = (int) ($validated['limit'] ?? 12);
-        $chunk = (int) ($validated['chunk'] ?? 200);
+        $chunk = (int) ($validated['chunk'] ?? (int) config('similar.rebuild.chunk_default', 200));
         $deferToNight = (bool) ($validated['defer_to_night'] ?? false);
 
         $startAt = null;
@@ -60,6 +106,7 @@ class AnimeSimilarAdminController extends Controller
             }
         }
 
+        $limit = $settingsService->getLimit();
         $queued = $dispatchService->dispatchByScope($scope, $limit, $chunk, $startAt);
 
         return response()->json([

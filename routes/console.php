@@ -499,4 +499,4 @@ Artisan::command(
     }
 )->purpose('Transcode one episode source into multiple MP4 qualities and store episode_media rows.');
 
-Schedule::command('anime:rebuild-similars --queue --scope=three_months --limit=12 --chunk=200')->dailyAt('03:30')->withoutOverlapping();
+Schedule::command('anime:rebuild-similars --queue --scope=three_months --chunk=200')->dailyAt('03:30')->withoutOverlapping();
