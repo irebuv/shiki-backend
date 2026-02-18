@@ -34,6 +34,10 @@ class Anime extends Model
         'similar',
         'reviews',
         'rate',
+        'similar_rebuilt_at',
+    ];
+    protected $casts = [
+        'similar_rebuilt_at' => 'datetime',
     ];
     public function filters()
     {

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AnimeAdminController;
 use App\Http\Controllers\Admin\AnimeEpisodeAdminController;
 use App\Http\Controllers\Admin\AnimeRelationAdminController;
+use App\Http\Controllers\Admin\AnimeSimilarAdminController;
 use App\Http\Controllers\Admin\FilterAdminController;
 use App\Http\Controllers\Admin\FilterGroupAdminController;
 use App\Http\Controllers\Admin\StudioAdminController;
@@ -49,6 +50,13 @@ Route::prefix('admin')
         Route::post('/anime/{anime}/relations/reorder', [AnimeRelationAdminController::class, 'reorderRelations']);
         Route::delete('/anime/{anime}/relations/current', [AnimeRelationAdminController::class, 'detachCurrentFromGroup']);
         Route::delete('/anime/{anime}/relations/{relation}', [AnimeRelationAdminController::class, 'destroyRelation']);
+
+        // anime similar routes | it separated from others
+        Route::post('/anime/similars/rebuild', [AnimeSimilarAdminController::class, 'rebuildNow']);
+        Route::get('/anime/similars/status', [AnimeSimilarAdminController::class, 'status']);
+        Route::delete('/anime/similars/queue', [AnimeSimilarAdminController::class, 'clearQueue']);
+        Route::get('/anime/similars/settings', [AnimeSimilarAdminController::class, 'settings']);
+        Route::put('/anime/similars/settings', [AnimeSimilarAdminController::class, 'updateSettings']);
 
         //filters routes
         Route::apiResource('/filters', FilterAdminController::class)->except(['show']);

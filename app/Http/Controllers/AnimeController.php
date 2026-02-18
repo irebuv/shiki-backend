@@ -8,6 +8,7 @@ use App\Models\AnimeSimilar;
 use App\Models\Episode;
 use App\Models\Filter;
 use App\Models\Studio;
+use App\Services\AnimeSimilarSettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
@@ -195,7 +196,7 @@ class AnimeController extends Controller
     }
 
     // one anime page
-    public function show(string $slug)
+    public function show(string $slug, AnimeSimilarSettingsService $similarSettings)
     {
         $anime = Anime::query()
             ->where('slug', $slug)
@@ -256,7 +257,7 @@ class AnimeController extends Controller
             ->where('anime_id', $anime->id)
             ->orderBy('position')
             ->orderByDesc('score')
-            ->limit(12)
+            ->limit($similarSettings->getLimit())
             ->get()
             ->map(function (AnimeSimilar $item) {
                 $related = $item->similarAnime;

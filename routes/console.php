@@ -6,6 +6,7 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process as SymfonyProcess;
 
@@ -497,3 +498,5 @@ Artisan::command(
         }
     }
 )->purpose('Transcode one episode source into multiple MP4 qualities and store episode_media rows.');
+
+Schedule::command('anime:rebuild-similars --queue --scope=three_months --chunk=200')->dailyAt('03:30')->withoutOverlapping();

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Anime;
 use App\Models\AnimeRelationGroup;
 use App\Models\AnimeRelationGroupItem;
+use App\Services\AnimeSimilarDispatchService;
+use App\Services\AnimeSimilarSettingsService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +16,11 @@ use Illuminate\Support\Str;
 
 class AnimeRelationAdminController extends Controller
 {
+    public function __construct(
+        private readonly AnimeSimilarDispatchService $similarDispatchService,
+        private readonly AnimeSimilarSettingsService $similarSettingsService,
+    ) {}
+
     public function relations(Anime $anime)
     {
         $sourceGroupItem = $this->groupItemForAnime($anime->id);
@@ -245,6 +252,7 @@ class AnimeRelationAdminController extends Controller
         }
 
         $resultItem->load('anime:id,name,slug,featured_image,season_year,season,type,status');
+        $this->dispatchSimilarRebuildForGroup((int) $resultItem->group_id);
 
         return response()->json([
             'message' => 'Anime added to relations group successfully.',
@@ -320,12 +328,20 @@ class AnimeRelationAdminController extends Controller
         }
 
         $groupId = (int) $sourceGroupItem->group_id;
+        $affectedAnimeIds = AnimeRelationGroupItem::query()
+            ->where('group_id', $groupId)
+            ->pluck('anime_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+        $affectedAnimeIds[] = (int) $relation->anime_id;
+        $affectedAnimeIds[] = (int) $anime->id;
 
         DB::transaction(function () use ($relation, $groupId) {
             $relation->delete();
             $this->normalizeSortOrder($groupId);
             $this->cleanupGroupIfTooSmall($groupId);
         });
+        $this->dispatchSimilarRebuildForAnimeIds($affectedAnimeIds);
 
         return response()->json([
             'message' => 'Relation deleted successfully.',
@@ -342,12 +358,19 @@ class AnimeRelationAdminController extends Controller
         }
 
         $groupId = (int) $sourceGroupItem->group_id;
+        $affectedAnimeIds = AnimeRelationGroupItem::query()
+            ->where('group_id', $groupId)
+            ->pluck('anime_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+        $affectedAnimeIds[] = (int) $anime->id;
 
         DB::transaction(function () use ($sourceGroupItem, $groupId) {
             $sourceGroupItem->delete();
             $this->normalizeSortOrder($groupId);
             $this->cleanupGroupIfTooSmall($groupId);
         });
+        $this->dispatchSimilarRebuildForAnimeIds($affectedAnimeIds);
 
         return response()->json([
             'message' => 'Anime removed from relations group.',
@@ -428,5 +451,32 @@ class AnimeRelationAdminController extends Controller
                 'featured_image_url' => $image === '' ? null : Storage::url($image),
             ] : null,
         ];
+    }
+
+    private function dispatchSimilarRebuildForGroup(int $groupId): void
+    {
+        $animeIds = AnimeRelationGroupItem::query()
+            ->where('group_id', $groupId)
+            ->pluck('anime_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+
+        $this->dispatchSimilarRebuildForAnimeIds($animeIds);
+    }
+
+    private function dispatchSimilarRebuildForAnimeIds(array $animeIds): void
+    {
+        $limit = $this->similarSettingsService->getLimit();
+        $seen = [];
+
+        foreach ($animeIds as $animeId) {
+            $id = (int) $animeId;
+            if ($id <= 0 || isset($seen[$id])) {
+                continue;
+            }
+
+            $seen[$id] = true;
+            $this->similarDispatchService->dispatchOne($id, $limit);
+        }
     }
 }
