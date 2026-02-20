@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
@@ -16,19 +17,37 @@ class AuthController extends Controller
             'name'     => ['required', 'string', 'max:255'],
             'email'    => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:6'],
+            'avatar' =>  ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
+
+        $avatarPath = null;
+        if ($request->hasFile('avatar')) {
+            $avatarPath = $request->file('avatar')->store('avatars/users', 'public');
+        }
+
         $user = User::create([
             'name'     => $data['name'],
             'email'    => $data['email'],
             'password' => Hash::make($data['password']),
+            'avatar_path' => $avatarPath,
         ]);
 
         $token = JWTAuth::fromUser($user);
 
         return response()->json([
-            'user'  => $user,
-            'token' => $token,
-        ]);
+            'message' => 'Registered successfully.',
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'avatar_path' => $user->avatar_path,
+                    'avatar_url' => $user->avatar_path ? Storage::url($user->avatar_path) : null,
+                ],
+                'token' => $token,
+            ],
+            'errors' => null,
+        ], 201);
     }
 
     public function login(Request $request)
@@ -40,12 +59,20 @@ class AuthController extends Controller
         ]);
 
         $credentials = $request->only(['email', 'password']);
-        $guard = Auth::guard('api');
-        $ttlMinutes = $request->boolean('rememberMe') ? 60 * 24 * 14 : config('jwt.ttl');
 
-        if (! $token = $guard->setTTL($ttlMinutes)->attempt($credentials)) {
+        /** @var JWTGuard $guard */
+        $guard = Auth::guard('api');
+
+        $ttlMinutes = (int) ($request->boolean('rememberMe')
+            ? 60 * 24 * 14
+            : (int) config('jwt.ttl', 60));
+
+        $guard->factory()->setTTL($ttlMinutes);
+
+        if (! $token = $guard->attempt($credentials)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
+
 
         return response()->json([
             'user'  => auth('api')->user(),
@@ -69,16 +96,16 @@ class AuthController extends Controller
     }
 
     public function refresh()
-{
-    /** @var JWTGuard $guard */
-    $guard = Auth::guard('api');
+    {
+        /** @var JWTGuard $guard */
+        $guard = Auth::guard('api');
 
-    return response()->json([
-        'message' => 'Token refreshed',
-        'data'    => [
-            'token' => $guard->refresh(),
-        ],
-        'errors'  => null,
-    ]);
-}
+        return response()->json([
+            'message' => 'Token refreshed',
+            'data'    => [
+                'token' => $guard->refresh(),
+            ],
+            'errors'  => null,
+        ]);
+    }
 }
