@@ -65,6 +65,11 @@ class Anime extends Model
         return $this->hasOne(AnimeRelationGroupItem::class, 'anime_id');
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(AnimeComment::class, 'anime_id');
+    }
+
     public function sluggable(): array
     {
         return [

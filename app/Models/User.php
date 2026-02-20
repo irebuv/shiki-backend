@@ -23,6 +23,9 @@ class User extends Authenticatable implements JWTSubject
         'name',
         'email',
         'password',
+        'phone',
+        'role',
+        'avatar_path',
     ];
 
     /**
@@ -61,5 +64,15 @@ class User extends Authenticatable implements JWTSubject
     public function animeFilterPresets(): HasMany
     {
         return $this->hasMany(AnimeFilterPreset::class);
+    }
+    
+    public function animeComments(): HasMany
+    {
+        return $this->hasMany(AnimeComment::class, 'user_id');
+    }
+
+    public function animeCommentVotes(): HasMany
+    {
+        return $this->hasMany(AnimeCommentVote::class, 'user_id');
     }
 }

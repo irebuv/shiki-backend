@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AnimeSimilarAdminController;
 use App\Http\Controllers\Admin\FilterAdminController;
 use App\Http\Controllers\Admin\FilterGroupAdminController;
 use App\Http\Controllers\Admin\StudioAdminController;
+use App\Http\Controllers\AnimeCommentController;
 use App\Http\Controllers\AnimeController;
 use App\Http\Controllers\AnimeFilterPresetController;
 use App\Http\Controllers\AuthController;
@@ -19,15 +20,26 @@ Route::get('/ping', function () {
 });
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login'])->name('login');
+
+// anime page and comment index
 Route::get('/anime', [AnimeController::class, 'index']);
 Route::get('/anime/{slug}', [AnimeController::class, 'show']);
+Route::get('/anime/{slug}/comments', [AnimeCommentController::class, 'index']);
+
 
 Route::middleware('auth:api')->group(function () {
     Route::get('/me',      [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
+
     Route::apiResource('/anime-filter-presets', AnimeFilterPresetController::class)
         ->only(['index', 'store', 'update', 'destroy']);
+
+    // routes related with comments
+    Route::post('/anime/{anime}/comments', [AnimeCommentController::class, 'store']);
+    Route::patch('/comments/{comment}', [AnimeCommentController::class, 'update']);
+    Route::delete('/comments/{comment}', [AnimeCommentController::class, 'destroy']);
+    Route::post('/comments/{comment}/vote', [AnimeCommentController::class, 'vote']);
 });
 
 
