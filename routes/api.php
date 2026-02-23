@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AnalyticsAdminController;
 use App\Http\Controllers\Admin\AnimeAdminController;
 use App\Http\Controllers\Admin\AnimeEpisodeAdminController;
 use App\Http\Controllers\Admin\AnimeRelationAdminController;
@@ -70,13 +71,16 @@ Route::prefix('admin')
         Route::get('/anime/similars/settings', [AnimeSimilarAdminController::class, 'settings']);
         Route::put('/anime/similars/settings', [AnimeSimilarAdminController::class, 'updateSettings']);
 
-        //filters routes
+        // filters routes
         Route::apiResource('/filters', FilterAdminController::class)->except(['show']);
 
-        //filter groups routes
+        // filter groups routes
         Route::apiResource('/filter-groups', FilterGroupAdminController::class)->except(['show']);
 
-        //studios routes
+        // studios routes
         Route::apiResource('/studios', StudioAdminController::class)->except(['show']);
         Route::post('/studios/{studio}/image', [StudioAdminController::class, 'uploadImage']);
+
+        // analytics
+        Route::get('/analytics/overview', [AnalyticsAdminController::class, 'overview']);
     });
