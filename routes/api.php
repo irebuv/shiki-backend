@@ -83,4 +83,5 @@ Route::prefix('admin')
 
         // analytics
         Route::get('/analytics/overview', [AnalyticsAdminController::class, 'overview']);
+        Route::get('/analytics/realtime', [AnalyticsAdminController::class, 'realtime']);
     });
