@@ -36,4 +36,24 @@ class AnalyticsAdminController extends Controller{
             ], 503);
         }
     }
+
+    public function realtime(){
+        try {
+            $data = $this->analyticsService->realtime();
+
+            return response()->json([
+                'message' => 'Realtime analytics loaded.',
+                'data' => $data,
+                'errors' => null,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Realtime analytics unavailable.',
+                'data' => null,
+                'errors' => null,
+            ], 503);
+        }
+    }
 }

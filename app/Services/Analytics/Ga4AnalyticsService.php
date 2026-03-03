@@ -61,9 +61,72 @@ class Ga4AnalyticsService {
                 'limit' => '10',
             ]);
 
-            $countriesReport = $this->runReport([
+            $locationsReport = $this->runReport([
                 'dateRanges' => [['startDate' => "{$days}daysAgo", 'endDate' => 'today']],
-                'dimensions' => [['name' => 'country']],
+                'dimensions' => [
+                    ['name' => 'country'],
+                    ['name' => 'city'],
+                ],
+                'metrics' => [['name' => 'activeUsers']],
+                'orderBys' => [
+                    ['metric' => ['metricName' => 'activeUsers'], 'desc' => true],
+                ],
+                'limit' => '15',
+            ]);
+
+            // $countriesReport = $this->runReport([
+            //     'dateRanges' => [['startDate' => "{$days}daysAgo", 'endDate' => 'today']],
+            //     'dimensions' => [['name' => 'country']],
+            //     'metrics' => [['name' => 'activeUsers']],
+            //     'orderBys' => [
+            //         ['metric' => ['metricName' => 'activeUsers'], 'desc' => true],
+            //     ],
+            //     'limit' => '10',
+            // ]);
+
+            return [
+                'period_days' => $days,
+                'summary' => $this->parseSummary($summaryReport),
+                'timeseries' => $this->parseTimeseries($timeseriesReport),
+                'top_pages' => $this->parseTopList($pagesReport, 'path', 'views'),
+                'top_sources' => $this->parseTopList($sourceReport, 'source', 'sessions'),
+                //'top_countries' => $this->parseTopList($locationsReport, 'country', 'users'),
+                'top_locations' => $this->parseLocations($locationsReport),
+                'updated_at' => now()->toIso8601String(),
+            ];
+        });
+    }
+
+    public function realtime(): array{
+        $cacheSeconds = (int) env('GA4_REALTIME_CACHE_SECONDS', 15);
+
+        return Cache::remember('ga4:realtime', $cacheSeconds, function(){
+            $summaryReport = $this->runRealtimeReport([
+                'metrics' => [
+                    ['name' => 'activeUsers'],
+                    ['name' => 'screenPageViews'],
+                    ['name' => 'eventCount'],
+                ],
+                'metricAggregations' => ['TOTAL'],
+            ]);
+
+            $pagesReport = $this->runRealtimeReport([
+                'dimensions' => [['name' => 'unifiedScreenName']],
+                'metrics' => [
+                    ['name' => 'activeUsers'],
+                    ['name' => 'screenPageViews'],
+                ],
+                'orderBys' => [
+                    ['metric' => ['metricName' => 'activeUsers'], 'desc' => true],
+                ],
+                'limit' => '10',
+            ]);
+
+            $locationsReport = $this->runRealtimeReport([
+                'dimensions' => [
+                    ['name' => 'country'],
+                    ['name' => 'city'],
+                ],
                 'metrics' => [['name' => 'activeUsers']],
                 'orderBys' => [
                     ['metric' => ['metricName' => 'activeUsers'], 'desc' => true],
@@ -72,12 +135,9 @@ class Ga4AnalyticsService {
             ]);
 
             return [
-                'period_days' => $days,
-                'summary' => $this->parseSummary($summaryReport),
-                'timeseries' => $this->parseTimeseries($timeseriesReport),
-                'top_pages' => $this->parseTopList($pagesReport, 'path', 'views'),
-                'top_sources' => $this->parseTopList($sourceReport, 'source', 'sessions'),
-                'top_countries' => $this->parseTopList($countriesReport, 'country', 'users'),
+                'summary' => $this->parseRealtimeSummary($summaryReport),
+                'top_pages' => $this->parseRealtimePages($pagesReport),
+                'top_locations' => $this->parseLocations($locationsReport),
                 'updated_at' => now()->toIso8601String(),
             ];
         });
@@ -85,7 +145,7 @@ class Ga4AnalyticsService {
 
     private function runReport(array $payload): array{
         if(!filter_var(env('GA4_ENABLED', false), FILTER_VALIDATE_BOOL)){
-            throw new RuntimeException('GA4 us disabled.');
+            throw new RuntimeException('GA4 is disabled.');
         }
 
         $propertyId = trim((string) env('GA4_PROPERTY_ID', ''));
@@ -100,6 +160,28 @@ class Ga4AnalyticsService {
 
         if ($response->failed()){
             throw new RuntimeException('GA4 request failed: ' . $response->body());
+        }
+
+        return $response->json() ?? [];
+    }
+
+    private function runRealtimeReport(array $payload): array{
+        if(!filter_var(env('GA4_ENABLED', false), FILTER_VALIDATE_BOOL)){
+            throw new RuntimeException('GA4 is disabled.');
+        }
+
+        $propertyId = trim((string) env('GA4_PROPERTY_ID', ''));
+        if($propertyId === ''){
+            throw new RuntimeException('GA4_PROPERTY_ID is not configured.');
+        }
+
+        $token = $this->accessToken();
+        $url = "https://analyticsdata.googleapis.com/v1beta/properties/{$propertyId}:runRealtimeReport";
+
+        $response = Http::timeout(20)->withToken($token)->post($url, $payload);
+
+        if ($response->failed()) {
+            throw new RuntimeException('GA4 realtime request failed: ' .$response->body());
         }
 
         return $response->json() ?? [];
@@ -189,6 +271,49 @@ class Ga4AnalyticsService {
             $result[] = [
                 $labelKey => (string) ($row['dimensionValues'][0]['value'] ?? '(unknown)'),
                 $valuesKey => (int) ($row['metricValues'][0]['value'] ?? 0),
+            ];
+        }
+
+        return $result;
+    }
+
+    private function parseLocations(array $report): array {
+        $rows = $report['rows'] ?? [];
+        $result = [];
+
+        foreach ($rows as $row) {
+            $country = (string) ($row['dimensionValues'][0]['value'] ?? 'Unknown country');
+            $city = (string) ($row['dimensionValues'][1]['value'] ?? 'Unknown city');
+            $users = (int) ($row['metricValues'][0]['value'] ?? 0);
+
+            $result[] = [
+                'location' => "{$country}, {$city}",
+                'users' => $users,
+            ];
+        }
+
+        return $result;
+    }
+
+    private function parseRealtimeSummary(array $report): array{
+        $totals = $report['totals'][0]['metricValues'] ?? [];
+
+        return [
+            'active_users_last_30_min' => (int) ($totals[0]['value'] ?? 0),
+            'views_last_30_min' => (int) ($totals[1]['value'] ?? 0),
+            'events_last_30_min' => (int) ($totals[2]['value'] ?? 0),
+        ];
+    }
+
+    private function parseRealtimePages(array $report): array{
+        $rows = $report['rows'] ?? [];
+        $result = [];
+
+        foreach ($rows as $row) {
+            $result[] = [
+                'path' => (string) ($row['dimensionValues'][0]['value'] ?? '(unknown)'),
+                'users' => (int) ($row['metricValues'][0]['value'] ?? 0),
+                'views' => (int) ($row['metricValues'][1]['value'] ?? 0),
             ];
         }
 
